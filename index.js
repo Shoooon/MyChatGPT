@@ -22,9 +22,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of events) {
     if (event.type === 'message' && event.message.type === 'text') {
       const userMessage = event.message.text;
-      if (!userMessage.includes('@NotGPT')) {
-        continue;
+      const isUserChat = event.source.type === 'user';
+      const isGroupChat = event.source.type === 'group' || event.source.type === 'room';
+      const wasMentioned = event.message.mentioned?.mentions?.length > 0;
+      // 応答する条件：個人トーク or グループでメンションされた場合
+      const shouldRespond = isUserChat || (isGroupChat && wasMentioned);
+      if (!shouldRespond) {
+        return; // 応答しない
       }
+      //if (!userMessage.includes('@NotGPT')) {
+      //  continue;
+      //}
 
       // 「検索」または「調べ」という単語が含まれているか？
       const needsSearch = /検索|調べ/.test(userMessage);
