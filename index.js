@@ -31,8 +31,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       
       if (needsSearch) {
         const query = event.message.text.trim();
-        const completion = await getSearchBasedResponse(query);   
-        const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
+        const botReply = await getSearchBasedResponse(query);   
         await client.replyMessage(event.replyToken, {
           type: 'text',
           text: botReply,
