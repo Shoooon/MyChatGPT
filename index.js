@@ -17,6 +17,8 @@ const openai = new OpenAI({
 });
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
+  if (!text.includes('@ChatGPT Bot')) {
+  continue;}
   const events = req.body.events;
   for (const event of events) {
     if (event.type === 'message' && event.message.type === 'text') {
