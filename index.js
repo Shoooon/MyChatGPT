@@ -1,8 +1,7 @@
 // Node.js + Express + LINE SDK + OpenAI
 const express = require('express');
 const line = require('@line/bot-sdk');
-const { Configuration, OpenAIApi } = require('openai');
-require('dotenv').config();
+const OpenAI = require('openai');
 
 const app = express();
 app.use(express.json());
@@ -13,16 +12,16 @@ const config = {
 };
 const client = new line.Client(config);
 
-const openai = new OpenAIApi(new Configuration({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-}));
+});
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
   for (const event of events) {
     if (event.type === 'message' && event.message.type === 'text') {
       const userMessage = event.message.text;
-      const completion = await openai.createChatCompletion({
+      const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [{ role: 'user', content: userMessage }],
       });
