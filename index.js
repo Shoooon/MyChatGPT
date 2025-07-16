@@ -21,7 +21,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of events) {
     if (event.type === 'message' && event.message.type === 'text') {
       const userMessage = event.message.text;
-      if (!userMessage.includes('@ChatGPT Bot')) {
+      if (!userMessage.includes('@NotGPT')) {
         continue;
       }
       
