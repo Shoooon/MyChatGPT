@@ -35,6 +35,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       //  continue;
       //}
 
+      userMessage = userMessage.replace('@NotGPT', '').trim();
+
       // 「検索」または「調べ」という単語が含まれているか？
       const needsSearch = /検索|調べ/.test(userMessage);
       
