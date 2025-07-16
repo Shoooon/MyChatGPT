@@ -24,12 +24,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       if (!userMessage.includes('@ChatGPT Bot')) {
         continue;
       }
+      
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [{ role: 'user', content: userMessage }],
       });
 
-      const botReply = completion.data.choices[0].message.content;
+      const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
 
       await client.replyMessage(event.replyToken, {
         type: 'text',
