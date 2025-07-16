@@ -25,7 +25,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gpt-3.5-turbo',
         messages: [{ role: 'user', content: userMessage }],
       });
 
