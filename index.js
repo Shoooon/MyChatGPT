@@ -27,20 +27,23 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       }
       if (userMessage.includes('検索'||'調べ')) {
         const query = event.message.text.trim();
-        const completion = await getSearchBasedResponse(query);
+        const completion = await getSearchBasedResponse(query);   
+        const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: botReply,
+        });
       } else{
         const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [{ role: 'user', content: userMessage }],
-      });
+        });
+        const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: botReply,
+        });
       }
-      
-      const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
-
-      await client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: botReply,
-      });
     }
   }
   res.sendStatus(200);
