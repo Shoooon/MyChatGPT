@@ -25,7 +25,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       if (!userMessage.includes('@NotGPT')) {
         continue;
       }
-      if (userMessage.includes('検索'||'調べ')) {
+
+      // 「検索」または「調べ」という単語が含まれているか？
+      const needsSearch = /検索|調べ/.test(userMessage);
+      
+      if (needsSearch) {
         const query = event.message.text.trim();
         const completion = await getSearchBasedResponse(query);   
         const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
