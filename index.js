@@ -70,7 +70,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       } else{
         const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
-        messages: [{ role: 'user', content: chatHistories[contextKey] }],
+        messages: chatHistories[contextKey],
         });
         const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
         // Botの返答も履歴に追加
