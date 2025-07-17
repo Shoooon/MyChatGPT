@@ -3,6 +3,7 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const OpenAI = require('openai');
 const fetch = require('node-fetch');
+const chatHistories = {}; // { contextKey: [ { role, content }, ... ] }
 
 const app = express();
 // app.use(express.json());
@@ -36,13 +37,32 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       //}
 
       userMessage = userMessage.replace('@NotGPT', '').trim();
+      
+      // contextKey = 履歴の識別キー（groupId or userId）
+      const contextKey = event.source.groupId || event.source.userId;
+ 
+      // 履歴がなければ初期化
+      if (!chatHistories[contextKey]) {
+        chatHistories[contextKey] = [];
+      }
 
+      // 会話履歴にユーザー発言を追加
+      chatHistories[contextKey].push({ role: 'user', content: userMessage });
+
+      
+      
       // 「検索」または「調べ」という単語が含まれているか？
       const needsSearch = /検索|調べ/.test(userMessage);
       
       if (needsSearch) {
         const query = event.message.text.trim();
-        const botReply = await getSearchBasedResponse(query);   
+        const botReply = await getSearchBasedResponse(chatHistories[contextKey]);   
+        // Botの返答も履歴に追加
+        chatHistories[contextKey].push({ role: 'assistant', content: botReply });
+        // 長すぎる履歴を切り詰める（20件程度）
+        if (chatHistories[contextKey].length > 40) {
+          chatHistories[contextKey] = chatHistories[contextKey].slice(-40);
+        }
         await client.replyMessage(event.replyToken, {
           type: 'text',
           text: botReply,
@@ -50,9 +70,15 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       } else{
         const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
-        messages: [{ role: 'user', content: userMessage }],
+        messages: [{ role: 'user', content: chatHistories[contextKey] }],
         });
         const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
+        // Botの返答も履歴に追加
+        chatHistories[contextKey].push({ role: 'assistant', content: botReply });
+        // 長すぎる履歴を切り詰める（20件程度）
+        if (chatHistories[contextKey].length > 40) {
+          chatHistories[contextKey] = chatHistories[contextKey].slice(-40);
+        }
         await client.replyMessage(event.replyToken, {
           type: 'text',
           text: botReply,
