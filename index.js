@@ -27,11 +27,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       const isGroupChat = event.source.type === 'group' || event.source.type === 'room';
       //const wasMentioned = event.message.mentioned?.mentions?.length > 0;
       const wasMentioned = userMessage.includes('@NotGPT');
-      // 応答する条件：個人トーク or グループでメンションされた場合
-      const shouldRespond = isUserChat || (isGroupChat && wasMentioned);
-      if (!shouldRespond) {
-        return; // 応答しない
-      }
+      
       //if (!userMessage.includes('@NotGPT')) {
       //  continue;
       //}
@@ -65,7 +61,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         role: userMessage.role,
         content: [{ type: 'text', text: userMessage.content }],  
       }));
-      
+      // 応答する条件：個人トーク or グループでメンションされた場合
+      const shouldRespond = isUserChat || (isGroupChat && wasMentioned);
+      if (!shouldRespond) {
+        return; // 応答しない
+      }
       // 「検索」または「調べ」という単語が含まれているか？
       const needsSearch = /検索|調べ/.test(userMessage);
       console.log("prompt:", formattedMessages);
