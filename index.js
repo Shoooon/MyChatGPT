@@ -58,6 +58,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       // 会話履歴にユーザー発言を追加
       chatHistories[contextKey].push({ role: 'user', content: `【${displayName}】：${userMessage}` });
 
+      console.log("contextKey:", contextKey);
+      console.log("履歴:", chatHistories[contextKey]);
       // OpenAIに投げる形式へ整形
       const formattedMessages = chatHistories[contextKey].map(userMessage => ({
         role: userMessage.role,
@@ -66,7 +68,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       
       // 「検索」または「調べ」という単語が含まれているか？
       const needsSearch = /検索|調べ/.test(userMessage);
-      
+      console.log("prompt:", formattedMessages);
       if (needsSearch) {
         const query = event.message.text.trim();
         const botReply = await getSearchBasedResponse(formattedMessages);   
