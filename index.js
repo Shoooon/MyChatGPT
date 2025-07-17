@@ -25,19 +25,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       let userMessage = event.message.text;
       const isUserChat = event.source.type === 'user';
       const isGroupChat = event.source.type === 'group' || event.source.type === 'room';
-      //const wasMentioned = event.message.mentioned?.mentions?.length > 0;
       const wasMentioned = userMessage.includes('@NotGPT');
-      
-      //if (!userMessage.includes('@NotGPT')) {
-      //  continue;
-      //}
 
       userMessage = userMessage.replace('@NotGPT', '').trim();
-      
-      // contextKey = 履歴の識別キー（groupId or userId）
+
       const contextKey = event.source.groupId || event.source.userId;
- 
-      // 履歴がなければ初期化
       if (!chatHistories[contextKey]) {
         chatHistories[contextKey] = [];
       }
@@ -51,82 +43,102 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           console.warn('名前取得失敗');
         }
       }
-      // 会話履歴にユーザー発言を追加
-      chatHistories[contextKey].push({ role: 'user', content: `【${displayName}】：${userMessage}` });
 
-      console.log("contextKey:", contextKey);
-      console.log("履歴:", chatHistories[contextKey]);
-      // OpenAIに投げる形式へ整形
-      const formattedMessages = chatHistories[contextKey].map(userMessage => ({
-        role: userMessage.role,
-        content: [{ type: 'text', text: userMessage.content }],  
+      const formattedUserMessage = `【${displayName}】：${userMessage}`;
+
+      chatHistories[contextKey].push({ role: 'user', content: formattedUserMessage });
+
+      const formattedMessages = chatHistories[contextKey].map(msg => ({
+        role: msg.role,
+        content: [{ type: 'text', text: msg.content }],
       }));
-      console.log("prompt:", formattedMessages);
-      // 応答する条件：個人トーク or グループでメンションされた場合
+
       const shouldRespond = isUserChat || (isGroupChat && wasMentioned);
-      if (!shouldRespond) {
-        return; // 応答しない
-      }
-      // 「検索」または「調べ」という単語が含まれているか？
-      const needsSearch = /検索|調べ/.test(userMessage);
-      if (needsSearch) {
-        const query = event.message.text.trim();
-        const botReply = await getSearchBasedResponse(formattedMessages);   
-        // Botの返答も履歴に追加
-        chatHistories[contextKey].push({ role: 'assistant', content: botReply });
-        // 長すぎる履歴を切り詰める（20件程度）
-        if (chatHistories[contextKey].length > 40) {
-          chatHistories[contextKey] = chatHistories[contextKey].slice(-40);
+      if (!shouldRespond) continue;
+      
+      // ステップ1：検索が必要かGPTに判断させる
+      const judgmentPrompt = [
+        {
+          role: 'system',
+          content: 'あなたはユーザーの質問に答えるアシスタントです。質問があなたの知識だけでは不十分と思われる場合、「検索が必要です」とだけ返答してください。'
+        },
+        {
+          role: 'user',
+          content: userMessage
         }
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: botReply,
-        });
-      } else{
-        
-        const completion = await openai.chat.completions.create({
+      ];
+
+      const judgment = await openai.chat.completions.create({
         model: 'gpt-4o',
-        messages: formattedMessages,
+        messages: judgmentPrompt,
+      });
+
+      const decision = judgment.choices[0].message.content;
+
+      let botReply;
+      if (decision.includes('検索が必要')) {
+        // ステップ2：キーワード抽出
+        const keywordPrompt = `以下の質問から検索に適したキーワードを3〜6語で抜き出してください。\n質問：${userMessage}\n検索キーワード：`;
+
+        const keywordExtract = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: keywordPrompt }]
         });
-        const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
-        // Botの返答も履歴に追加
-        chatHistories[contextKey].push({ role: 'assistant', content: botReply });
-        // 長すぎる履歴を切り詰める（20件程度）
-        if (chatHistories[contextKey].length > 40) {
-          chatHistories[contextKey] = chatHistories[contextKey].slice(-40);
-        }
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: botReply,
+
+        const keywords = keywordExtract.choices[0].message.content;
+
+        // ステップ3：検索API呼び出し
+        const searchRes = await fetch('https://google.serper.dev/search', {
+          method: 'POST',
+          headers: {
+            'X-API-KEY': process.env.SERPER_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ q: keywords }),
         });
+
+        const json = await searchRes.json();
+        const snippet = json.organic?.[0]?.snippet || '検索結果が取得できませんでした。';
+
+        const searchPrompt = [
+          {
+            role: 'system',
+            content: '以下の検索結果を参考にしてユーザーの質問に答えてください。正確かつ簡潔に答えてください。'
+          },
+          {
+            role: 'user',
+            content: `検索結果：${snippet}\n質問：${userMessage}`
+          }
+        ];
+
+        const final = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: searchPrompt
+        });
+
+        botReply = final.choices[0].message.content || 'しらねぇよ';
+      } else {
+        // GPTが自力で答える
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: formattedMessages
+        });
+
+        botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
       }
+
+      chatHistories[contextKey].push({ role: 'assistant', content: botReply });
+      if (chatHistories[contextKey].length > 40) {
+        chatHistories[contextKey] = chatHistories[contextKey].slice(-40);
+      }
+
+      await client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: botReply,
+      });
     }
   }
   res.sendStatus(200);
 });
 
-// Web検索→GPT連携の関数
-async function getSearchBasedResponse(userQuery) {
-  // Serper API呼び出し
-  const searchRes = await fetch('https://google.serper.dev/search', {
-    method: 'POST',
-    headers: {
-      'X-API-KEY': process.env.SERPER_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ q: userQuery }),
-  });
-  const json = await searchRes.json();
-  const snippet = json.organic?.[0]?.snippet || '検索結果が取得できませんでした。';
-
-  const prompt = `以下はWeb検索結果です。これを参考にしてユーザーの質問に答えてください。\n\n検索結果: ${snippet}\n\n質問: ${userQuery}`;
-
-  // ChatGPTに投げる
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  return completion?.choices?.[0]?.message?.content || 'しらねぇよ';
-}
 app.listen(3000, () => console.log('Bot is running'));
