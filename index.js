@@ -21,7 +21,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
   for (const event of events) {
     if (event.type === 'message' && event.message.type === 'text') {
-      const userMessage = event.message.text;
+      let userMessage = event.message.text;
       const isUserChat = event.source.type === 'user';
       const isGroupChat = event.source.type === 'group' || event.source.type === 'room';
       //const wasMentioned = event.message.mentioned?.mentions?.length > 0;
