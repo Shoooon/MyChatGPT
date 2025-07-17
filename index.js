@@ -45,7 +45,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       }
 
       const formattedUserMessage = `【${displayName}】：${userMessage}`;
-
       chatHistories[contextKey].push({ role: 'user', content: formattedUserMessage });
 
       const formattedMessages = chatHistories[contextKey].map(msg => ({
@@ -54,8 +53,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       }));
 
       const shouldRespond = isUserChat || (isGroupChat && wasMentioned);
-      if (!shouldRespond) continue;
-      
+      if (!shouldRespond) continue; // 応答しないが履歴は記録済み
+
       // ステップ1：検索が必要かGPTに判断させる
       const judgmentPrompt = [
         {
@@ -77,7 +76,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       let botReply;
       if (decision.includes('検索が必要')) {
-        // ステップ2：キーワード抽出
         const keywordPrompt = `以下の質問から検索に適したキーワードを3〜6語で抜き出してください。\n質問：${userMessage}\n検索キーワード：`;
 
         const keywordExtract = await openai.chat.completions.create({
@@ -87,7 +85,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         const keywords = keywordExtract.choices[0].message.content;
 
-        // ステップ3：検索API呼び出し
         const searchRes = await fetch('https://google.serper.dev/search', {
           method: 'POST',
           headers: {
@@ -101,6 +98,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const snippet = json.organic?.[0]?.snippet || '検索結果が取得できませんでした。';
 
         const searchPrompt = [
+          ...formattedMessages,
           {
             role: 'system',
             content: '以下の検索結果を参考にしてユーザーの質問に答えてください。正確かつ簡潔に答えてください。'
@@ -118,7 +116,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         botReply = final.choices[0].message.content || 'しらねぇよ';
       } else {
-        // GPTが自力で答える
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o',
           messages: formattedMessages
