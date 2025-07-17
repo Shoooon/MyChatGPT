@@ -49,14 +49,18 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       // 会話履歴にユーザー発言を追加
       chatHistories[contextKey].push({ role: 'user', content: userMessage });
 
-      
+      // OpenAIに投げる形式へ整形
+      const formattedMessages = chatHistories[contextKey].map(userMessage => ({
+        role: userMessage.role,
+        content: [{ type: 'text', text: userMessage.content }],  
+      }));
       
       // 「検索」または「調べ」という単語が含まれているか？
       const needsSearch = /検索|調べ/.test(userMessage);
       
       if (needsSearch) {
         const query = event.message.text.trim();
-        const botReply = await getSearchBasedResponse(chatHistories[contextKey]);   
+        const botReply = await getSearchBasedResponse(formattedMessages);   
         // Botの返答も履歴に追加
         chatHistories[contextKey].push({ role: 'assistant', content: botReply });
         // 長すぎる履歴を切り詰める（20件程度）
@@ -68,9 +72,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           text: botReply,
         });
       } else{
+        
         const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
-        messages: chatHistories[contextKey],
+        messages: formattedMessages,
         });
         const botReply = completion?.choices?.[0]?.message?.content || 'しらねぇよ';
         // Botの返答も履歴に追加
