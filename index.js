@@ -46,8 +46,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         chatHistories[contextKey] = [];
       }
 
+      let displayName = '誰か';
+      if (isGroupChat) {
+        try {
+          const profile = await client.getGroupMemberProfile(event.source.groupId, event.source.userId);
+          displayName = profile.displayName;
+        } catch (e) {
+          console.warn('名前取得失敗');
+        }
+      }
       // 会話履歴にユーザー発言を追加
-      chatHistories[contextKey].push({ role: 'user', content: userMessage });
+      chatHistories[contextKey].push({ role: 'user', content: `【${displayName}】：${userMessage}` });
 
       // OpenAIに投げる形式へ整形
       const formattedMessages = chatHistories[contextKey].map(userMessage => ({
